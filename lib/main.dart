@@ -124,11 +124,15 @@ class _CalendarViewState extends State<CalendarView> {
             TableCalendar(
               calendarFormat: CalendarFormat.week,
               onDaySelected: (DateTime selectedDay, DateTime focusedDay) {
-                setState(() {
-                  _selectedDay = selectedDay;
-                });
+                if (_selectedDay == selectedDay && _selectedEvents.value.isNotEmpty) {
+                  _selectedEvents.value = [];
+                } else {
+                  setState(() {
+                    _selectedDay = selectedDay;
+                  });
 
-                _selectedEvents.value = getSelectedEvents(selectedDay);
+                  _selectedEvents.value = getSelectedEvents(selectedDay);
+                }
               },
               eventLoader: (day) {
                 return getSelectedEvents(day);
