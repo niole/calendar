@@ -92,6 +92,8 @@ class _CalendarViewState extends State<CalendarView> {
     events[key] = (events[key] ?? []);
     events[key]!.add(Event(tag));
 
+    _selectedEvents.value = events[key]!;
+
     setState(() {
       events = events;
     });
