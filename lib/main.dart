@@ -9,6 +9,12 @@ class Event {
 
   @override
   String toString() => title;
+
+  @override
+  bool operator ==(Object other) =>
+    identical(this, other) || other is Event &&
+    runtimeType == other.runtimeType &&
+    title == other.title;
 }
 
 void main() {
@@ -65,6 +71,17 @@ class _CalendarViewState extends State<CalendarView> {
     setState(() {
       tags = tags;
     });
+  }
+
+  void deleteTagFromDay(Event tag, DateTime date) {
+    DateTime key = getDateKey(date);
+    if (events.containsKey(key)) {
+      events[key] = events[key]!.where((t) => t != tag).toList();
+      setState(() {
+        events = events;
+        _selectedEvents.value = events[key]!;
+      });
+    }
   }
 
   void addTagToDay(String tag, DateTime date) {
@@ -140,7 +157,14 @@ class _CalendarViewState extends State<CalendarView> {
                           borderRadius: BorderRadius.circular(12.0),
                         ),
                         child: ListTile(
-                          onTap: () => {},
+                          trailing: FloatingActionButton.small(
+                            heroTag: value[index],
+                            onPressed: () {
+                              deleteTagFromDay(value[index], _selectedDay);
+                            },
+                            backgroundColor: Colors.red,
+                            child: const Icon(Icons.delete_outlined),
+                          ),
                           title: Text('${value[index]}'),
                         ),
                       );
