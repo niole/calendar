@@ -1,23 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
-
-class Event {
-  final String title;
-
-  const Event(this.title);
-
-  @override
-  String toString() => title;
-
-  @override
-  bool operator ==(Object other) =>
-    identical(this, other) || other is Event &&
-    runtimeType == other.runtimeType &&
-    title == other.title;
-}
+import 'state.dart';
+import 'event.dart';
 
 void main() {
+  setupGlobalState();
   runApp(const MyApp());
 }
 
@@ -32,59 +20,53 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         textTheme: const TextTheme(bodySmall: TextStyle(fontSize: 50), bodyLarge: TextStyle(fontSize: 50.0)),
       ),
-      home: const DefaultTextStyle(
-        style: TextStyle(fontSize: 50, color: Colors.blue),
-        child: CalendarView(title: 'Calendar'),
+      home: DefaultTextStyle(
+        style: const TextStyle(fontSize: 50, color: Colors.blue),
+        child: ValueListenableBuilder<MainPage>(
+          valueListenable: getIt<GlobalState>().mainPage,
+          builder: (context, value, _) {
+            return CalendarView(title: 'Calendar', s: value);
+          }
+        ),
       ),
     );
   }
 }
 
-class CalendarView extends StatefulWidget {
-  const CalendarView({super.key, required this.title});
+class CalendarView extends StatelessWidget {
+  const CalendarView({super.key, required this.title, required this.s});
   final String title;
+  final MainPage s;
 
-  @override
-  State<CalendarView> createState() => _CalendarViewState();
-}
-
-class _CalendarViewState extends State<CalendarView> {
-  DateTime _selectedDay = DateTime.now();
-
-  // the user created tags
-  Set<String> tags = {};
-
-  // the dates that each event has been added to
-  Map<DateTime, List<Event>> events = {};
-
-  late final ValueNotifier<List<Event>> _selectedEvents;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _selectedEvents = ValueNotifier(getSelectedEvents(_selectedDay));
-  }
+  void updateState(MainPage newState) =>
+    getIt<GlobalState>().mainPage.value = newState.clone();
 
   void setTag(String newTag) {
+    Set<String> tags = s.tags.value;
+
     tags.add(newTag);
-    setState(() {
-      tags = tags;
-    });
+
+    s.tags.value = tags;
+
+    updateState(s);
   }
 
   void deleteTagFromDay(Event tag, DateTime date) {
+    Map<DateTime, List<Event>> events = s.events.value;
     DateTime key = getDateKey(date);
+
     if (events.containsKey(key)) {
       events[key] = events[key]!.where((t) => t != tag).toList();
-      setState(() {
-        events = events;
-        _selectedEvents.value = events[key]!;
-      });
+
+      s.events.value = events;
+      s.selectedEvents.value = events[key]!;
+      updateState(s);
     }
   }
 
   void addTagToDay(String tag, DateTime date) {
+    Map<DateTime, List<Event>> events = s.events.value;
+
     setTag(tag);
 
     DateTime key = getDateKey(date);
@@ -92,11 +74,9 @@ class _CalendarViewState extends State<CalendarView> {
     events[key] = (events[key] ?? []);
     events[key]!.add(Event(tag));
 
-    _selectedEvents.value = events[key]!;
-
-    setState(() {
-      events = events;
-    });
+    s.events.value = events;
+    s.selectedEvents.value = events[key]!;
+    updateState(s);
   }
 
   DateTime getDateKey(DateTime date) {
@@ -104,20 +84,15 @@ class _CalendarViewState extends State<CalendarView> {
   }
 
   List<Event> getSelectedEvents(DateTime date) {
-    return events[getDateKey(date)] ?? [];
-  }
-
-  @override
-  void dispose() {
-    _selectedEvents.dispose();
-    super.dispose();
+    return s.events.value[getDateKey(date)] ?? [];
   }
 
   @override
   Widget build(BuildContext context) {
+    DateTime _selectedDay = s.selectedDay.value;
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title),
+        title: Text(title),
       ),
       body: Center(
         child: Column(
@@ -126,29 +101,28 @@ class _CalendarViewState extends State<CalendarView> {
             TableCalendar(
               calendarFormat: CalendarFormat.week,
               onDaySelected: (DateTime selectedDay, DateTime focusedDay) {
-                if (_selectedDay == selectedDay && _selectedEvents.value.isNotEmpty) {
-                  _selectedEvents.value = [];
+                if (s.selectedDay.value == selectedDay && s.selectedEvents.value.isNotEmpty) {
+                  s.selectedEvents.value = [];
                 } else {
-                  setState(() {
-                    _selectedDay = selectedDay;
-                  });
-
-                  _selectedEvents.value = getSelectedEvents(selectedDay);
+                  s.selectedDay.value = selectedDay;
+                  s.selectedEvents.value = getSelectedEvents(selectedDay);
                 }
+
+                updateState(s);
               },
               eventLoader: (day) {
                 return getSelectedEvents(day);
               },
               firstDay: DateTime.now().subtract(const Duration(days: 180)),
               lastDay: DateTime.now().add(const Duration(days: 180)),
-              focusedDay: _selectedDay,
+              focusedDay: s.selectedDay.value,
               selectedDayPredicate: (day) {
                 return isSameDay(_selectedDay, day);
               },
             ),
             Expanded(
               child: ValueListenableBuilder<List<Event>>(
-                valueListenable: _selectedEvents,
+                valueListenable: s.selectedEvents,
                 builder: (context, value, _) {
                   return ListView.builder(
                     itemCount: value.length,
@@ -196,7 +170,7 @@ class _CalendarViewState extends State<CalendarView> {
                       suggestionsCallback: (String query) {
                         // find the matching tags and suggest new label
                         List<String> matches = [query];
-                        matches.addAll(tags.where((k) => k.contains(query)).toList());
+                        matches.addAll(s.tags.value.where((k) => k.contains(query)).toList());
                         matches.sort((a, b) => a == query ? 0 : a.compareTo(b));
                         return matches;
                       },
